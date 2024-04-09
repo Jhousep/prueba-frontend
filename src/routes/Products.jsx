@@ -6,8 +6,10 @@ import { API_URL } from "../auth/constants.jsx";
 import { differenceInYears } from 'date-fns';
 import { FaMoneyBillWave, FaPlus, FaCaretLeft, FaCaretRight } from "react-icons/fa";
 import { toast } from 'react-toastify';
+import SelectImage from "../components/SelectImage";
 
 function Products() {
+
     const auth = useAuth()
     //Con este estado manejamos si se creo un nuevo invoice 
     const [invoiceCreated, setInvoiceCreated] = useState(false)
@@ -64,33 +66,41 @@ function Products() {
 
     //Estado del Invoice seleccionado
     const [selectInvoice, setSelectInvoice] = useState(null);
-    //Aquí se refrescará los datos que se mostrará en ProductDetailsModal
+
+
+    const [isOpenNewInvoiceModal, setIsOpenNewInvoiceModal] = useState(false);
+    const [isOpenVoucherModal, setIsOpenVoucherModal] = useState(false);
+    const [isOpenProductDetailsModal, setIsOpenProductDetailsModal] = useState(false);
+
+    //Aquí se refrescará los datos que se mostrará en ProductDetailsModal o VoucherModal
     useEffect(() => {
         if (selectInvoice) {
             if (isOpenVoucherModal) {
                 const fetchData = async () => {
                     try {
                         const response = await fetch(`${API_URL}/invoice/voucher-details`, {
-                            method: "GET",
+                            method: "POST",
+                            body: JSON.stringify({ invoice_pk: selectInvoice }),
                             headers: {
                                 "Content-Type": "application/json",
                                 Authorization: `Bearer ${auth.getRefreshToken()}`
                             }
-                        })
+                        });
 
                         if (response.ok) {
-
-                            return
-                        }
-                        else {
+                            const blob = await response.blob(); // Obtener el cuerpo de la respuesta como un Blob
+                            const imageUrl = URL.createObjectURL(blob);
+                            setImageSrc(imageUrl);
+                        } else {
                             console.error(`Error al obtener datos`);
+                            setImageSrc("");
                         }
-                    }
-                    catch (error) {
+                    } catch (error) {
                         console.error(`Error en la solicitud:`, error);
                     }
-                }
-                fetchData()
+                };
+
+                fetchData();
             }
             else if (isOpenProductDetailsModal) {
 
@@ -112,6 +122,7 @@ function Products() {
                         }
                         else {
                             console.error(`Error al obtener datos`);
+                            setProductDetailsList([])
                         }
                     }
                     catch (error) {
@@ -121,12 +132,21 @@ function Products() {
                 fetchData()
             }
         }
-    }, [selectInvoice])
+    }, [selectInvoice, isOpenVoucherModal, isOpenProductDetailsModal])
 
-    const [isOpenNewInvoiceModal, setIsOpenNewInvoiceModal] = useState(false);
-    const [isOpenVoucherModal, setIsOpenVoucherModal] = useState(false);
-    const [isOpenProductDetailsModal, setIsOpenProductDetailsModal] = useState(false);
+    const [imageSrc, setImageSrc] = useState('');
+    const [uploadedImage, setUploadedImage] = useState('');
 
+    // Validar la imagen cada vez que cambia
+    useEffect(() => {
+        setDataNewInvoiceModal({
+            ...dataNewInvoiceModal, 
+            uploadedImage,
+        });
+
+    }, [uploadedImage]);
+
+    
     const toggleNewInvoiceModal = () => {
         setIsOpenNewInvoiceModal(!isOpenNewInvoiceModal);
         !isOpenNewInvoiceModal ? document.body.style.overflow = 'hidden' : document.body.style.overflow = 'auto'
@@ -137,21 +157,25 @@ function Products() {
         setQuantityInput(1)
         setSubTotal(0);
         setTotal(0);
+        setUploadedImage("")
 
         //reset data del form NewInvoicemodal
         setDataNewInvoiceModal({
             date: '',
             client_pk: '',
+            uploadedImage: ''
         })
     };
 
     //Cambio de estados modals
     const toggleVoucherModal = () => {
+        setImageSrc("");
         setIsOpenVoucherModal(!isOpenVoucherModal);
         !isOpenVoucherModal ? document.body.style.overflow = 'hidden' : document.body.style.overflow = 'auto'
     };
 
     const toggleProductDetailsModal = () => {
+        setProductDetailsList([])
         setIsOpenProductDetailsModal(!isOpenProductDetailsModal);
         !isOpenProductDetailsModal ? document.body.style.overflow = 'hidden' : document.body.style.overflow = 'auto'
     };
@@ -177,7 +201,8 @@ function Products() {
 
     const [dataNewInvoiceModal, setDataNewInvoiceModal] = useState({
         date: '',
-        client_pk: ''
+        client_pk: '',
+        uploadedImage: ''
     })
 
     // Estado para el subtotal
@@ -297,7 +322,7 @@ function Products() {
             });
 
             if (name === "client_pk") {
-                // Acceder al atributo data-price del elemento seleccionado
+                // Acceder al atributo data-client del elemento seleccionado
                 const client_affiliation_date = event.target.selectedOptions[0].getAttribute('data-client');
                 const datePart = client_affiliation_date.split('T')[0];
                 setAffiliationDate(client_affiliation_date)
@@ -369,10 +394,9 @@ function Products() {
     return (
         <DefaultTemplate>
             <main className='pt-2'>
-
                 {isOpenNewInvoiceModal && (
                     <section>
-                        <div tabIndex="-1" aria-hidden="true" className="fixed inset-0 flex items-center justify-center z-50 overflow-y-auto">
+                        <div tabIndex="-1" aria-hidden="true" className="fixed inset-0 flex items-center justify-center z-40 overflow-y-auto">
                             <div className="fixed inset-0 bg-black opacity-70"></div>
                             <div className="relative p-4 w-full max-w-5xl max-h-full">
                                 <div className="relative bg-white rounded-lg shadow dark:bg-gray-700">
@@ -436,7 +460,7 @@ function Products() {
                                                         <button type='button' className='bg-neutral-800 hover:bg-neutral-700 disabled:bg-gray-200 px-2 rounded-md' onClick={() => handleAddProduct()} disabled={tempProductList.length === 0 ? true : false}><FaPlus className='text-white' /></button>
                                                     </div>
                                                 </div>
-                                                <div className="col-span-2 sm:col-span-1 ">
+                                                <div className="col-span-2 sm:col-span-1">
                                                     <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Quantity</label>
 
                                                     {tempProductList.length === 0 ? (
@@ -446,12 +470,12 @@ function Products() {
                                                             <div className='grid grid-cols-3 gap-1'>
                                                                 <button className='bg-neutral-800 hover:bg-neutral-700 disabled:bg-gray-200 rounded-md py-2.5 flex items-center justify-center' type='button' onClick={decrementQuantity} disabled={quantityInput === 1 ? true : false}><FaCaretLeft className='text-white' /></button>
                                                                 <input
-                                                                    className='border text-center'
+                                                                    className='border text-center py-2.5'
                                                                     type="text"
                                                                     value={quantityInput}
                                                                     disabled
                                                                 />
-                                                                <button className='bg-neutral-800 hover:bg-neutral-700 rounded-md flex items-center justify-center' type='button' onClick={incrementQuantity}><FaCaretRight className='text-white' /></button>
+                                                                <button className='bg-neutral-800 hover:bg-neutral-700 rounded-md flex items-center justify-center py-2.5' type='button' onClick={incrementQuantity}><FaCaretRight className='text-white' /></button>
                                                             </div>
                                                         </div>
 
@@ -497,7 +521,7 @@ function Products() {
                                                                         </td>
                                                                         <td className="px-6 py-1">
                                                                             <div className='flex items-center justify-center'>
-                                                                            {product.name} <span title={`Price per unit: $${product.price}`}><FaMoneyBillWave className='text-green-700 ml-4 cursor-pointer' size={20} /></span>
+                                                                                {product.name} <span title={`Price per unit: $${product.price}`}><FaMoneyBillWave className='text-green-700 ml-4 cursor-pointer' size={20} /></span>
                                                                             </div>
                                                                         </td>
                                                                     </tr>
@@ -531,11 +555,7 @@ function Products() {
                                             </div>
                                         </div>
                                         <div className='md:col-span-1 col-span-3 md:order-last order-first px-7 border-b border-gray-300 pb-7 md:border-none'>
-                                            <div className='flex content-center flex-col items-center'>
-                                                <h3 className='text-lg font-semibold mb-2'>Voucher</h3>
-                                                <img width={"200px"} src="/images/default/default.jpg" alt="imagen por defecto" />
-                                                <button className='bg-neutral-800 hover:bg-neutral-700 p-4 rounded-md text-white mt-4' type="button">Select Image</button>
-                                            </div>
+                                            <SelectImage uploadedImage={uploadedImage} setUploadedImage={setUploadedImage} />
                                         </div>
                                     </form>
                                 </div>
@@ -543,12 +563,11 @@ function Products() {
                         </div>
                     </section>
                 )}
-
                 {isOpenVoucherModal && (
                     <section>
                         <div tabIndex="-1" aria-hidden="true" className="fixed inset-0 flex items-center justify-center z-50">
                             <div className="fixed inset-0 bg-black opacity-70"></div>
-                            <div className="relative p-4 w-full max-w-md max-h-full">
+                            <div className="relative p-4 w-full max-w-xl max-h-3/4">
                                 <div className="relative bg-white rounded-lg shadow dark:bg-gray-700">
                                     <div className="flex items-center justify-between p-4 md:p-5 border-b rounded-t dark:border-gray-600">
                                         <h1 className="text-3xl font-semibold text-gray-800 dark:text-white flex-grow text-center">
@@ -562,8 +581,12 @@ function Products() {
                                         </button>
                                     </div>
                                     {/* <!-- Modal body --> */}
-                                    <div className='p-4'>
-                                        <img src="/images/default/default.jpg" alt="imagen por defecto" />
+                                    <div className='p-4 flex items-center justify-center '>
+                                        <div>
+                                            {imageSrc && <img src={imageSrc} alt="image of invoice selected" />}
+                                            {!imageSrc && <span>Loading ...</span>}
+                                        </div>
+
                                     </div>
                                 </div>
                             </div>
